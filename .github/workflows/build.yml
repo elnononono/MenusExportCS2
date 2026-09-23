@@ -1,0 +1,77 @@
+name: Build MenusExport
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    container:
+      image: ghcr.io/pisex/ubuntu20:latest
+
+    env:
+      HL2SDK_ROOT: "${{ github.workspace }}/external"
+      MMS_PATH: "${{ github.workspace }}/external/metamod-source"
+      MANIFEST_PATH: "${{ github.workspace }}/external/metamod-source/hl2sdk-manifests"
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up dependencies
+        run: |
+          export DEBIAN_FRONTEND=noninteractive
+          apt-get update -qy
+          apt-get install -y git clang-10 clang++-10 binutils python3 python3-pip zip
+
+          python3 -m pip install --upgrade pip importlib-metadata
+          python3 -m pip install setuptools==45.2.0
+
+          git clone https://github.com/alliedmodders/ambuild.git ambuild
+          cd ambuild
+          pip3 install .
+          cd ..
+
+          mkdir -p external
+          cd external
+          # Metamod 2.0 (KHook). Only the submodules needed to build a plugin are fetched.
+          git clone --depth 1 --branch master --single-branch \
+            https://github.com/alliedmodders/metamod-source.git
+          git -C metamod-source submodule update --init --depth 1 third_party/khook third_party/amtl hl2sdk-manifests
+          git clone --recursive --depth 1 --branch cs2 --single-branch \
+            https://github.com/alliedmodders/hl2sdk.git hl2sdk-cs2
+
+      - name: Configure and build plugin
+        shell: bash
+        run: |
+          set -o pipefail
+          mkdir build
+          cd build
+          # MenuManager loads addons/MenusExport/bin/MenusExport.so, so the name must stay MenusExport
+          python3 ../configure.py -s cs2 --targets x86_64 --enable-optimize -n MenusExport -a MenusExport \
+            --hl2sdk-manifests=$MANIFEST_PATH --mms_path=$MMS_PATH --hl2sdk-root=$HL2SDK_ROOT 2>&1 | tee ../build.log
+          ambuild 2>&1 | tee -a ../build.log
+
+      - name: Report compiler errors
+        if: failure()
+        shell: bash
+        run: |
+          touch build.log
+          errors=$(grep -E "error:|undefined reference|Traceback|Exception" build.log | sort -u)
+          if [ -z "$errors" ]; then errors=$(tail -n 30 build.log); fi
+          echo "$errors" | head -n 40 | while IFS= read -r line; do
+            echo "::error::${line}"
+          done
+          { echo '```'; echo "$errors" | head -n 200; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: MenusExport-${{ github.sha }}
+          path: build/package

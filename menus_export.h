@@ -17,7 +17,8 @@
 
 #include <ISmmPlugin.h>
 #include <igameevents.h>
-#include <sh_vector.h>
+#include <string>
+#include <vector>
 #include "include/menus.h"
 
 
