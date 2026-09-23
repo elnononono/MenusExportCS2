@@ -13,7 +13,6 @@
  */
 
 #include <stdio.h>
-#include <string.h>
 #include "menus_export.h"
 #include "iserver.h"
 
@@ -35,26 +34,15 @@ CGlobalVars *GetGameGlobals()
 }
 
 
+PLUGIN_EXPOSE(Plugin, g_Plugin);
+
 // PLUGIN_EXPOSE registers the plugin in the SDK interface list, which can end up shared with other
 // libraries: MenuManager loads this .so before Metamod does, and old plugins loaded in between then
-// answer Metamod's lookup with their own ISmmPlugin (API 17). Return our instance directly instead.
-ISmmAPI *g_SMAPI = NULL;
-ISmmPlugin *g_PLAPI = NULL;
-PluginId g_PLID = (PluginId)0;
-namespace KHook { KHook::IKHook* __exported__khook = nullptr; }
-
-DLL_EXPORT void *CreateInterface(const char *pName, int *pReturnCode)
+// answer Metamod's CreateInterface lookup with their own ISmmPlugin (API 17). Metamod tries
+// CreateInterface_MMS first, so hand it our instance directly.
+SMM_API METAMOD_PLUGIN *CreateInterface_MMS(const MetamodVersionInfo *mvi, const MetamodLoaderInfo *mli)
 {
-	if (pName && !strcmp(pName, METAMOD_PLAPI_NAME))
-	{
-		if (pReturnCode)
-			*pReturnCode = IFACE_OK;
-		return static_cast<ISmmPlugin *>(&g_Plugin);
-	}
-
-	if (pReturnCode)
-		*pReturnCode = IFACE_FAILED;
-	return NULL;
+	return &g_Plugin;
 }
 bool Plugin::Load(PluginId id, ISmmAPI *ismm, char *error, size_t maxlen, bool late)
 {
