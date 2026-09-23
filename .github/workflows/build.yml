@@ -12,8 +12,8 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-    container:
-      image: ghcr.io/pisex/ubuntu20:latest
+    # Same toolchain as the Metamod 2.0 plugins (e.g. Cruze03/GameBanFix): Steam Runtime sniper + Clang 21
+    container: registry.gitlab.steamos.cloud/steamrt/sniper/sdk
 
     env:
       HL2SDK_ROOT: "${{ github.workspace }}/external"
@@ -26,17 +26,13 @@ jobs:
 
       - name: Set up dependencies
         run: |
-          export DEBIAN_FRONTEND=noninteractive
-          apt-get update -qy
-          apt-get install -y git clang-10 clang++-10 binutils python3 python3-pip zip
-
-          python3 -m pip install --upgrade pip importlib-metadata
-          python3 -m pip install setuptools==45.2.0
+          echo "deb http://apt.llvm.org/bullseye/ llvm-toolchain-bullseye-21 main" >> /etc/apt/sources.list.d/llvm.list
+          wget -O - https://apt.llvm.org/llvm-snapshot.gpg.key | apt-key add -
+          apt-get update && apt-get install -y clang-21
+          ln -sf /usr/bin/clang-21 /usr/bin/clang && ln -sf /usr/bin/clang++-21 /usr/bin/clang++
 
           git clone https://github.com/alliedmodders/ambuild.git ambuild
-          cd ambuild
-          pip3 install .
-          cd ..
+          cd ambuild && python3 setup.py install && cd ..
 
           mkdir -p external
           cd external
@@ -51,6 +47,7 @@ jobs:
         shell: bash
         run: |
           set -o pipefail
+          export CC=clang CXX=clang++
           mkdir build
           cd build
           # MenuManager loads addons/MenusExport/bin/MenusExport.so, so the name must stay MenusExport
